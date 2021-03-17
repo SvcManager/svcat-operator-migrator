@@ -8,15 +8,15 @@ To use the migration CLI you need to download and install it first:
 ### Approach 1: Manual installation
 
 #### Download CLI
-`` go get github.wdf.sap.corp/SvcManager/k8s-migrator``
+`` go get github.com/SvcManager/svcat-operator-migrator``
 
 #### Install CLI
 
-``go install github.wdf.sap.corp/SvcManager/k8s-migrator``
+``go install github.com/SvcManager/svcat-operator-migrator``
 
 #### Rename the CLI binary
 
-``mv $GOPATH/bin/k8s-migrator $GOPATH/bin/migrate``
+``mv $GOPATH/bin/svcat-operator-migrator $GOPATH/bin/migrate``
 
 ### Approach 2: Get the latest CLI release
 You can get started with the CLI by simply downloading the latest release from [HERE](https://github.com/SvcManager/svcat-operator-migrator/releases).
