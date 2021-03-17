@@ -19,7 +19,7 @@ To use the migration CLI you need to download and install it first:
 ``mv $GOPATH/bin/k8s-migrator $GOPATH/bin/migrate``
 
 ### Approach 2: Get the latest CLI release
-You can get started with the CLI by simply downloading the latest release from [HERE][2].
+You can get started with the CLI by simply downloading the latest release from [HERE](https://github.com/SvcManager/svcat-operator-migrator/releases).
 
 
 ## Using CLI
