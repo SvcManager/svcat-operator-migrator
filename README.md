@@ -8,11 +8,11 @@ To use the migration CLI you need to download and install it first:
 ### Approach 1: Manual installation
 
 #### Download CLI
-`` go get github.com/SvcManager/svcat-operator-migrator``
+``clone this repository``
 
 #### Install CLI
 
-``go install github.com/SvcManager/svcat-operator-migrator``
+``go install``
 
 #### Rename the CLI binary
 
