@@ -1,7 +1,7 @@
 package main
 
 import (
-	"svcat-operator-migrator/cmd"
+	"github.com/SvcManager/svcat-operator-migrator/cmd"
 )
 
 func main() {

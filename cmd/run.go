@@ -16,7 +16,7 @@ limitations under the License.
 package cmd
 
 import (
-	"svcat-operator-migrator/migrate"
+	"github.com/SvcManager/svcat-operator-migrator/migrate"
 
 	"github.com/spf13/cobra"
 )

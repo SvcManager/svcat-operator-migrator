@@ -1,4 +1,4 @@
-module svcat-operator-migrator
+module github.com/SvcManager/svcat-operator-migrator
 
 go 1.15
 

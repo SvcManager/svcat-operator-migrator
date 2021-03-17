@@ -16,8 +16,8 @@ limitations under the License.
 package cmd
 
 import (
+	"github.com/SvcManager/svcat-operator-migrator/migrate"
 	"github.com/spf13/cobra"
-	"svcat-operator-migrator/migrate"
 )
 
 // versionCmd represents the version command

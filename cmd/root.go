@@ -17,9 +17,9 @@ package cmd
 
 import (
 	"context"
+	config "github.com/SvcManager/svcat-operator-migrator/configuartion"
 	"os"
 	"path/filepath"
-	config "svcat-operator-migrator/configuartion"
 
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
