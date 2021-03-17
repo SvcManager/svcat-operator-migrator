@@ -22,22 +22,22 @@ To use the migration CLI you need to download and install it first:
 ## Using CLI
 
 ```
-migrate from SVCAT to SAP BTP Service Operator.
+Migration tool from SVCAT to SAP BTP Service Operator.
 
 Usage:
   migrate [flags]
   migrate [command]
 
 Available Commands:
+  dry-run     Run migration in dry run mode
   help        Help about any command
   run         Run migration process
+  version     Prints migrate version
 
 Flags:
-      --config string       config file (default is $HOME/.migrate/config.json)
+  -c, --config string       config file (default is $HOME/.migrate/config.json)
   -h, --help                help for migrate
-      --kubeconfig string   absolute path to the kubeconfig file (default $HOME/.kube/config)
+  -k, --kubeconfig string   absolute path to the kubeconfig file (default $HOME/.kube/config)
   -n, --namespace string    namespace to find operator secret (default sap-btp-operator)
-
-Use "migrate [command] --help" for more information about a command.
 ```
 
