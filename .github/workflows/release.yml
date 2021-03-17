@@ -24,4 +24,4 @@ jobs:
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
           goversion: "https://dl.google.com/go/go1.15.1.linux-amd64.tar.gz"
-          ldflags: -X "github.com/SvcManager/svcat-operator-migrator/cmd/version.GitCommit=${{ env.GIT_COMMIT }}" -X "github.com/SvcManager/svcat-operator-migrator/cmd/version.Version=${{ env.APP_VERSION }}"
+          ldflags: -X "github.com/SvcManager/svcat-operator-migrator/cmd.GitCommit=${{ env.GIT_COMMIT }}" -X "github.com/SvcManager/svcat-operator-migrator/cmd.Version=${{ env.APP_VERSION }}"
