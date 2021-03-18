@@ -6,7 +6,7 @@
 **instanceID**: instance of service-manager/service-operator-access
 2. Install [sap btp service operator](https://github.com/SAP/sap-btp-service-operator#setup) by providing clusterID the same as of SVCAT 
 
-***Note: you can delete the old platform after successful migration***
+***Note: you can delete the old platform after successful migration, as it suspended and not usable anymore***
 
 ## Getting started
 
