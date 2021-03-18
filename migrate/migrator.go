@@ -16,7 +16,6 @@ import (
 	"github.com/SAP/sap-btp-service-operator/client/sm/types"
 	"github.com/kubernetes-sigs/service-catalog/pkg/apis/servicecatalog/v1beta1"
 	"github.com/spf13/cobra"
-	v1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -122,7 +121,7 @@ func (m *Migrator) Migrate(ctx context.Context, executionMode ExecutionMode) {
 	instancesToMigrate := m.getInstancesToMigrate(smInstances, svcatInstances)
 	bindingsToMigrate := m.getBindingsToMigrate(smBindings, svcatBindings)
 	if len(instancesToMigrate) == 0 && len(bindingsToMigrate) == 0 {
-		fmt.Println("no svact instances or bindings found for migration")
+		fmt.Println("no svcat instances or bindings found for migration")
 		return
 	}
 	fmt.Println(fmt.Sprintf("*** found %d instances and %d bindings to migrate", len(instancesToMigrate), len(bindingsToMigrate)))
@@ -131,7 +130,7 @@ func (m *Migrator) Migrate(ctx context.Context, executionMode ExecutionMode) {
 		fmt.Println("*** Validating")
 		failuresCount, validationErrorsMsg := m.validate(ctx, instancesToMigrate, bindingsToMigrate)
 		if failuresCount > 0 {
-			fmt.Println(fmt.Sprintf("No resources were migrated due to %d validation errors:", failuresCount))
+			fmt.Println(fmt.Sprintf("Validation failed got %d validation errors:", failuresCount))
 			fmt.Println(validationErrorsMsg.String())
 			return
 		} else {
@@ -146,7 +145,7 @@ func (m *Migrator) Migrate(ctx context.Context, executionMode ExecutionMode) {
 
 	var failuresBuffer bytes.Buffer
 	for _, pair := range instancesToMigrate {
-		err := m.migrateInstance(ctx, pair, false)
+		err := m.migrateInstance(ctx, pair)
 		if err != nil {
 			fmt.Println(err.Error())
 			failuresBuffer.WriteString(err.Error() + "\n")
@@ -154,7 +153,7 @@ func (m *Migrator) Migrate(ctx context.Context, executionMode ExecutionMode) {
 	}
 
 	for _, pair := range bindingsToMigrate {
-		err := m.migrateBinding(ctx, pair, false)
+		err := m.migrateBinding(ctx, pair)
 		if err != nil {
 			fmt.Println(err.Error())
 			failuresBuffer.WriteString(err.Error() + "\n")
@@ -217,81 +216,52 @@ func (m *Migrator) getBindingsToMigrate(smBindings *types.ServiceBindings, svcat
 	return validBindings
 }
 
-func (m *Migrator) migrateInstance(ctx context.Context, pair serviceInstancePair, dryRun bool) error {
-	if !dryRun {
-		fmt.Println(fmt.Sprintf("migrating service instance '%s' in namespace '%s' (smID: '%s')", pair.svcatInstance.Name, pair.svcatInstance.Namespace, pair.svcatInstance.Spec.ExternalID))
+func (m *Migrator) migrateInstanceDryRun(ctx context.Context, pair serviceInstancePair) error {
+	instance := m.getInstanceStruct(pair)
+	err := m.SapOperatorRestClient.Post().
+		Namespace(pair.svcatInstance.Namespace).
+		Resource(ServiceInstances).
+		Param("dryRun", "All").
+		Body(instance).
+		Do(ctx).
+		Error()
+	if err != nil {
+		return err
 	}
-	plan := m.Plans[pair.smInstance.ServicePlanID]
-	service := m.Services[plan.ServiceOfferingID]
+	return nil
+}
+
+func (m *Migrator) migrateBindingDryRun(ctx context.Context, pair serviceBindingPair) error {
+	binding := m.getBindingStruct(pair)
+	err := m.SapOperatorRestClient.Post().
+		Namespace(pair.svcatBinding.Namespace).
+		Resource(ServiceBindings).
+		Param("dryRun", "All").
+		Body(binding).
+		Do(ctx).
+		Error()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *Migrator) migrateInstance(ctx context.Context, pair serviceInstancePair) error {
+
+	fmt.Println(fmt.Sprintf("migrating service instance '%s' in namespace '%s' (smID: '%s')", pair.svcatInstance.Name, pair.svcatInstance.Namespace, pair.svcatInstance.Spec.ExternalID))
 
 	//set k8s label
-	if !dryRun {
-		requestBody := fmt.Sprintf(`{"k8sname": "%s"}`, pair.svcatInstance.Name)
-		buffer := bytes.NewBuffer([]byte(requestBody))
-		response, err := m.SMClient.Call(http.MethodPut, fmt.Sprintf("/v1/migrate/service_instances/%s", pair.smInstance.ID), buffer, &sm.Parameters{})
-		if err != nil || response.StatusCode != http.StatusOK {
-			if response != nil {
-				fmt.Println(response.StatusCode)
-			}
-			return fmt.Errorf("failed to add k8s label to service instance name: %s, ID: %s", pair.smInstance.Name, pair.smInstance.ID)
+	requestBody := fmt.Sprintf(`{"k8sname": "%s"}`, pair.svcatInstance.Name)
+	buffer := bytes.NewBuffer([]byte(requestBody))
+	response, err := m.SMClient.Call(http.MethodPut, fmt.Sprintf("/v1/migrate/service_instances/%s", pair.smInstance.ID), buffer, &sm.Parameters{})
+	if err != nil || response.StatusCode != http.StatusOK {
+		if response != nil {
+			fmt.Println(response.StatusCode)
 		}
+		return fmt.Errorf("failed to add k8s label to service instance name: %s, ID: %s", pair.smInstance.Name, pair.smInstance.ID)
 	}
 
-	parametersFrom := make([]v1alpha1.ParametersFromSource, 0)
-	for _, param := range pair.svcatInstance.Spec.ParametersFrom {
-		parametersFrom = append(parametersFrom, v1alpha1.ParametersFromSource{
-			SecretKeyRef: &v1alpha1.SecretKeyReference{
-				Name: param.SecretKeyRef.Name,
-				Key:  param.SecretKeyRef.Key,
-			},
-		})
-	}
-	extra := make(map[string]v1.ExtraValue, 0)
-	for key, value := range pair.svcatInstance.Spec.UserInfo.Extra {
-		extra[key] = []string(value)
-	}
-	userInfo, err := json.Marshal(pair.svcatInstance.Spec.UserInfo)
-	if err != nil {
-		fmt.Println(fmt.Sprintf("failed to parse user info for binding %s: %v", pair.svcatInstance.Name, err.Error()))
-	}
-	instance := &v1alpha1.ServiceInstance{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: fmt.Sprintf("%s/%s", sapoperator.OperatorGroupName, sapoperator.OperatorGroupVersion),
-			Kind:       "ServiceInstance",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pair.svcatInstance.Name,
-			Namespace: pair.svcatInstance.Namespace,
-			Labels: map[string]string{
-				"migrated": "true",
-			},
-			Annotations: map[string]string{
-				"original_creation_timestamp": pair.svcatInstance.CreationTimestamp.String(),
-				"original_user_info":          string(userInfo)},
-		},
-		Spec: v1alpha1.ServiceInstanceSpec{
-			ServicePlanName:     plan.Name,
-			ServiceOfferingName: service.Name,
-			ExternalName:        pair.smInstance.Name,
-			ParametersFrom:      parametersFrom,
-			Parameters:          pair.svcatInstance.Spec.Parameters,
-		},
-	}
-
-	if dryRun {
-		err := m.SapOperatorRestClient.Post().
-			Namespace(pair.svcatInstance.Namespace).
-			Resource(ServiceInstances).
-			Param("dryRun", "All").
-			Body(instance).
-			Do(ctx).
-			Error()
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
+	instance := m.getInstanceStruct(pair)
 	res := &v1alpha1.ServiceInstance{}
 	err = m.SapOperatorRestClient.Post().
 		Namespace(pair.svcatInstance.Namespace).
@@ -318,22 +288,22 @@ func (m *Migrator) migrateInstance(ctx context.Context, pair serviceInstancePair
 		return fmt.Errorf("failed to delete finalizer from instance '%s'. Error: %v", pair.svcatInstance.Name, err.Error())
 	}
 
-	err = m.deleteSvcResource(ctx, res.Name, res.Namespace, ServiceInstances)
+	err = m.deleteSvcatResource(ctx, res.Name, res.Namespace, ServiceInstances)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("failed to delete svcat resource. Error: %v", err.Error()))
 	}
+	fmt.Println("migrated successfully")
 	return nil
 }
 
-func (m *Migrator) migrateBinding(ctx context.Context, pair serviceBindingPair, dryRun bool) error {
-	if !dryRun {
-		fmt.Println(fmt.Sprintf("migrating service binding '%s' in namespace '%s' (smID: '%s')", pair.svcatBinding.Name, pair.svcatBinding.Namespace, pair.svcatBinding.Spec.ExternalID))
-	}
+func (m *Migrator) migrateBinding(ctx context.Context, pair serviceBindingPair) error {
+
+	fmt.Println(fmt.Sprintf("migrating service binding '%s' in namespace '%s' (smID: '%s')", pair.svcatBinding.Name, pair.svcatBinding.Namespace, pair.svcatBinding.Spec.ExternalID))
 	secretExists := true
 	secret, err := m.ClientSet.CoreV1().Secrets(pair.svcatBinding.Namespace).Get(ctx, pair.svcatBinding.Spec.SecretName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			fmt.Println(fmt.Sprintf("*INFO* secret named '%s' not found for binding", pair.svcatBinding.Spec.SecretName))
+			fmt.Println(fmt.Sprintf("Info: secret named '%s' not found for binding", pair.svcatBinding.Spec.SecretName))
 			secretExists = false
 		} else {
 			return fmt.Errorf("failed to get binding's secret, skipping binding migration. Error: %v", err.Error())
@@ -344,78 +314,25 @@ func (m *Migrator) migrateBinding(ctx context.Context, pair serviceBindingPair, 
 	if err != nil {
 		return fmt.Errorf("failed to build request body for migrating instance. Error: %v", err.Error())
 	}
-	if !dryRun {
-		buffer := bytes.NewBuffer([]byte(requestBody))
-		response, err := m.SMClient.Call(http.MethodPut, fmt.Sprintf("/v1/migrate/service_bindings/%s", pair.smBinding.ID), buffer, &sm.Parameters{})
-		if err != nil || response.StatusCode != http.StatusOK {
-			return fmt.Errorf("failed to add k8s label to service binding name: %s, ID: %s", pair.smBinding.Name, pair.smBinding.ID)
-		}
-
-		if secretExists {
-			//add 'binding' label to secret
-			if secret.Labels == nil {
-				secret.Labels = make(map[string]string, 1)
-			}
-			secret.Labels["binding"] = pair.svcatBinding.Name
-			secret, err = m.ClientSet.CoreV1().Secrets(secret.Namespace).Update(ctx, secret, metav1.UpdateOptions{})
-			if err != nil {
-				return fmt.Errorf("failed to add label to binding. Error: %v", err.Error())
-			}
-		}
+	buffer := bytes.NewBuffer([]byte(requestBody))
+	response, err := m.SMClient.Call(http.MethodPut, fmt.Sprintf("/v1/migrate/service_bindings/%s", pair.smBinding.ID), buffer, &sm.Parameters{})
+	if err != nil || response.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to add k8s label to service binding name: %s, ID: %s", pair.smBinding.Name, pair.smBinding.ID)
 	}
 
-	parametersFrom := make([]v1alpha1.ParametersFromSource, 0)
-	for _, param := range pair.svcatBinding.Spec.ParametersFrom {
-		parametersFrom = append(parametersFrom, v1alpha1.ParametersFromSource{
-			SecretKeyRef: &v1alpha1.SecretKeyReference{
-				Name: param.SecretKeyRef.Name,
-				Key:  param.SecretKeyRef.Key,
-			},
-		})
-	}
-	extra := make(map[string]v1.ExtraValue, 0)
-	for key, value := range pair.svcatBinding.Spec.UserInfo.Extra {
-		extra[key] = []string(value)
-	}
-	userInfo, err := json.Marshal(pair.svcatBinding.Spec.UserInfo)
-	if err != nil {
-		fmt.Println(fmt.Sprintf("failed to parse user info for binding %s. Error: %v", pair.svcatBinding.Name, err.Error()))
-	}
-	binding := &v1alpha1.ServiceBinding{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: fmt.Sprintf("%s/%s", sapoperator.OperatorGroupName, sapoperator.OperatorGroupVersion),
-			Kind:       "ServiceBinding",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pair.svcatBinding.Name,
-			Namespace: pair.svcatBinding.Namespace,
-			Labels: map[string]string{
-				"migrated": "true",
-			},
-			Annotations: map[string]string{
-				"original_creation_timestamp": pair.svcatBinding.CreationTimestamp.String(),
-				"original_user_info":          string(userInfo)},
-		},
-		Spec: v1alpha1.ServiceBindingSpec{
-			ServiceInstanceName: pair.svcatBinding.Spec.InstanceRef.Name,
-			ExternalName:        pair.smBinding.Name,
-			ParametersFrom:      parametersFrom,
-			Parameters:          pair.svcatBinding.Spec.Parameters,
-		},
-	}
-	if dryRun {
-		err = m.SapOperatorRestClient.Post().
-			Namespace(pair.svcatBinding.Namespace).
-			Resource(ServiceBindings).
-			Param("dryRun", "All").
-			Body(binding).
-			Do(ctx).
-			Error()
+	if secretExists {
+		//add 'binding' label to secret
+		if secret.Labels == nil {
+			secret.Labels = make(map[string]string, 1)
+		}
+		secret.Labels["binding"] = pair.svcatBinding.Name
+		secret, err = m.ClientSet.CoreV1().Secrets(secret.Namespace).Update(ctx, secret, metav1.UpdateOptions{})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to add label to binding. Error: %v", err.Error())
 		}
-		return nil
 	}
+
+	binding := m.getBindingStruct(pair)
 	res := &v1alpha1.ServiceBinding{}
 	err = m.SapOperatorRestClient.Post().
 		Namespace(binding.Namespace).
@@ -460,14 +377,15 @@ func (m *Migrator) migrateBinding(ctx context.Context, pair serviceBindingPair, 
 		return fmt.Errorf("failed to delete finalizer from binding '%s'. Error: %v", pair.svcatBinding.Name, err.Error())
 	}
 
-	err = m.deleteSvcResource(ctx, res.Name, res.Namespace, ServiceBindings)
+	err = m.deleteSvcatResource(ctx, res.Name, res.Namespace, ServiceBindings)
 	if err != nil {
 		return fmt.Errorf("failed to delete svcat binding. Error: %v", err.Error())
 	}
+	fmt.Println("migrated successfully")
 	return nil
 }
 
-func (m *Migrator) deleteSvcResource(ctx context.Context, resourceName string, resourceNamespace string, resourceType string) error {
+func (m *Migrator) deleteSvcatResource(ctx context.Context, resourceName string, resourceNamespace string, resourceType string) error {
 
 	err := m.SapOperatorRestClient.Get().Name(resourceName).Namespace(resourceNamespace).Resource(resourceType).Do(ctx).Error()
 	if err != nil {
@@ -476,7 +394,7 @@ func (m *Migrator) deleteSvcResource(ctx context.Context, resourceName string, r
 		return err
 	}
 
-	fmt.Println(fmt.Sprintf("deleting svcat resource type '%s' named '%s' in namespace '%s'", resourceType, resourceName, resourceNamespace))
+	//fmt.Println(fmt.Sprintf("deleting svcat resource type '%s' named '%s' in namespace '%s'", resourceType, resourceName, resourceNamespace))
 	err = m.SvcatRestClient.Delete().Name(resourceName).Namespace(resourceNamespace).Resource(resourceType).Do(ctx).Error()
 	return err
 }
@@ -506,7 +424,7 @@ func (m *Migrator) validate(ctx context.Context, instancesToMigrate []serviceIns
 	var buffer bytes.Buffer
 	count := 0
 	for _, pair := range instancesToMigrate {
-		err := m.migrateInstance(ctx, pair, true)
+		err := m.migrateInstanceDryRun(ctx, pair)
 		if err != nil {
 			count++
 			buffer.WriteString(fmt.Sprintf("instance '%s' in namespace '%s' failed: '%v' \n", pair.svcatInstance.Name, pair.svcatInstance.Namespace, err.Error()))
@@ -516,7 +434,7 @@ func (m *Migrator) validate(ctx context.Context, instancesToMigrate []serviceIns
 	}
 
 	for _, pair := range bindingsToMigrate {
-		err := m.migrateBinding(ctx, pair, true)
+		err := m.migrateBindingDryRun(ctx, pair)
 		if err != nil {
 			count++
 			buffer.WriteString(fmt.Sprintf("binding '%s' in namespace '%s' failed: '%v' \n", pair.svcatBinding.Name, pair.svcatBinding.Namespace, err.Error()))
@@ -545,4 +463,88 @@ func getServices(smclient sm.Client) map[string]types.ServiceOffering {
 		res[svc.ID] = svc
 	}
 	return res
+}
+
+func (m *Migrator) getInstanceStruct(pair serviceInstancePair) *v1alpha1.ServiceInstance {
+	plan := m.Plans[pair.smInstance.ServicePlanID]
+	service := m.Services[plan.ServiceOfferingID]
+
+	parametersFrom := make([]v1alpha1.ParametersFromSource, 0)
+	for _, param := range pair.svcatInstance.Spec.ParametersFrom {
+		parametersFrom = append(parametersFrom, v1alpha1.ParametersFromSource{
+			SecretKeyRef: &v1alpha1.SecretKeyReference{
+				Name: param.SecretKeyRef.Name,
+				Key:  param.SecretKeyRef.Key,
+			},
+		})
+	}
+
+	userInfo, err := json.Marshal(pair.svcatInstance.Spec.UserInfo)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("failed to parse user info for instance %s: %v", pair.svcatInstance.Name, err.Error()))
+	}
+
+	return &v1alpha1.ServiceInstance{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: fmt.Sprintf("%s/%s", sapoperator.OperatorGroupName, sapoperator.OperatorGroupVersion),
+			Kind:       "ServiceInstance",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pair.svcatInstance.Name,
+			Namespace: pair.svcatInstance.Namespace,
+			Labels: map[string]string{
+				"migrated": "true",
+			},
+			Annotations: map[string]string{
+				"original_creation_timestamp": pair.svcatInstance.CreationTimestamp.String(),
+				"original_user_info":          string(userInfo)},
+		},
+		Spec: v1alpha1.ServiceInstanceSpec{
+			ServicePlanName:     plan.Name,
+			ServiceOfferingName: service.Name,
+			ExternalName:        pair.smInstance.Name,
+			ParametersFrom:      parametersFrom,
+			Parameters:          pair.svcatInstance.Spec.Parameters,
+		},
+	}
+}
+
+func (m *Migrator) getBindingStruct(pair serviceBindingPair) *v1alpha1.ServiceBinding {
+	parametersFrom := make([]v1alpha1.ParametersFromSource, 0)
+	for _, param := range pair.svcatBinding.Spec.ParametersFrom {
+		parametersFrom = append(parametersFrom, v1alpha1.ParametersFromSource{
+			SecretKeyRef: &v1alpha1.SecretKeyReference{
+				Name: param.SecretKeyRef.Name,
+				Key:  param.SecretKeyRef.Key,
+			},
+		})
+	}
+
+	userInfo, err := json.Marshal(pair.svcatBinding.Spec.UserInfo)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("failed to parse user info for binding %s. Error: %v", pair.svcatBinding.Name, err.Error()))
+	}
+
+	return &v1alpha1.ServiceBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: fmt.Sprintf("%s/%s", sapoperator.OperatorGroupName, sapoperator.OperatorGroupVersion),
+			Kind:       "ServiceBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pair.svcatBinding.Name,
+			Namespace: pair.svcatBinding.Namespace,
+			Labels: map[string]string{
+				"migrated": "true",
+			},
+			Annotations: map[string]string{
+				"original_creation_timestamp": pair.svcatBinding.CreationTimestamp.String(),
+				"original_user_info":          string(userInfo)},
+		},
+		Spec: v1alpha1.ServiceBindingSpec{
+			ServiceInstanceName: pair.svcatBinding.Spec.InstanceRef.Name,
+			ExternalName:        pair.smBinding.Name,
+			ParametersFrom:      parametersFrom,
+			Parameters:          pair.svcatBinding.Spec.Parameters,
+		},
+	}
 }
