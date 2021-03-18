@@ -60,8 +60,6 @@ migrate run
 *** Fetched 1 bindings from SM
 *** Fetched 5 svcat instances from cluster
 *** Fetched 2 svcat bindings from cluster
-*** Fetched 14 operator instances from cluster
-*** Fetched 3 operator bindings from cluster
 *** Preparing resources
 svcat instance name 'test11' id 'XXX-6134-4c89-bff5-YYY' (test11) not found in SM, skipping it...
 svcat instance name 'test21' id 'XXX-cae6-4e23-9e8a-YYY' (test21) not found in SM, skipping it...
