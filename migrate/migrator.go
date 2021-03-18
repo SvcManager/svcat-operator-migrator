@@ -118,16 +118,6 @@ func (m *Migrator) Migrate(ctx context.Context, executionMode ExecutionMode) {
 	cobra.CheckErr(err)
 	fmt.Println(fmt.Sprintf("*** Fetched %v svcat bindings from cluster", len(svcatBindings.Items)))
 
-	operatorInstances := v1alpha1.ServiceInstanceList{}
-	err = m.SapOperatorRestClient.Get().Namespace("").Resource(ServiceInstances).Do(ctx).Into(&operatorInstances)
-	cobra.CheckErr(err)
-	fmt.Println(fmt.Sprintf("*** Fetched %v operator instances from cluster", len(operatorInstances.Items)))
-
-	operatorBindings := v1alpha1.ServiceBindingList{}
-	err = m.SapOperatorRestClient.Get().Namespace("").Resource(ServiceBindings).Do(ctx).Into(&operatorBindings)
-	cobra.CheckErr(err)
-	fmt.Println(fmt.Sprintf("*** Fetched %v operator bindings from cluster", len(operatorBindings.Items)))
-
 	fmt.Println("*** Preparing resources")
 	instancesToMigrate := m.getInstancesToMigrate(smInstances, svcatInstances)
 	bindingsToMigrate := m.getBindingsToMigrate(smBindings, svcatBindings)
