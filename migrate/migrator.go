@@ -292,7 +292,7 @@ func (m *Migrator) migrateInstance(ctx context.Context, pair serviceInstancePair
 	if err != nil {
 		fmt.Println(fmt.Sprintf("failed to delete svcat resource. Error: %v", err.Error()))
 	}
-	fmt.Println("migrated successfully")
+	fmt.Println("instance migrated successfully")
 	return nil
 }
 
@@ -381,7 +381,7 @@ func (m *Migrator) migrateBinding(ctx context.Context, pair serviceBindingPair) 
 	if err != nil {
 		return fmt.Errorf("failed to delete svcat binding. Error: %v", err.Error())
 	}
-	fmt.Println("migrated successfully")
+	fmt.Println("binding migrated successfully")
 	return nil
 }
 
