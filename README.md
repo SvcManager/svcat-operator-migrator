@@ -1,5 +1,11 @@
 # svcat-operator-migrator
 
+## Prerequisite
+1. Prepare your platform for migration by executing: </br>
+``smctl curl -X PUT  -d '{"sourcePlatformID": ":platformID"}' /v1/migrate/service_operator/:instanceID``
+2. Install [operator](https://github.com/SAP/sap-btp-service-operator) by providing clusterID the same as of SVCAT 
+
+instanceID: instance of service-manager/service-operator-access
 
 ## Getting started
 
