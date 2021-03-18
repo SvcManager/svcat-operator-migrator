@@ -4,7 +4,7 @@
 1. Prepare your platform for migration by executing: </br>
 ```smctl curl -X PUT  -d '{"sourcePlatformID": ":platformID"}' /v1/migrate/service_operator/:instanceID``` </br>
 **instanceID**: instance of service-manager/service-operator-access
-2. Install [operator](https://github.com/SAP/sap-btp-service-operator) by providing clusterID the same as of SVCAT 
+2. Install [sap btp service operator](https://github.com/SAP/sap-btp-service-operator#setup) by providing clusterID the same as of SVCAT 
 
 ***Note: you can delete the old platform after successful migration***
 
