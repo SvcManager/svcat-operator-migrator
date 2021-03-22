@@ -55,7 +55,7 @@ Flags:
 
 ```sh
 # Run migration including pre migration validations
-migrate run
+> migrate run
 *** Fetched 2 instances from SM
 *** Fetched 1 bindings from SM
 *** Fetched 5 svcat instances from cluster
